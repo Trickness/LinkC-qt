@@ -1,18 +1,24 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef MAINWINDOW
+#define MAINWINDOW
 
-#include <QMainWindow>
-#include "./json/src/json.hpp"
+#include <QWidget>
+#include <QMessageBox>
+#include "LoginWindow.h"
+#include "gurgle.h"
 
-using namespace nlohmann;
-using namespace std;
-
-class MainWindow : public QMainWindow{
+class MainWindow : public QWidget{
     Q_OBJECT
 
 public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
+public slots:
+    void SLOT_LoginWinSignInButtonClicked();
+    void SLOT_LoginWinCancelButtonClicked();
+private:
+    LoginWindow *LoginW;
+    gurgle      *core;
 };
 
-#endif // MAINWINDOW_H
+#endif // MAINWINDOW
+
