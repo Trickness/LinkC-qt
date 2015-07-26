@@ -197,7 +197,24 @@ struct gurgle_id_t{
     char    domain[32];
     char    terminal[16];
 };
-typedef struct gurgle_id_t gurgle_id_t;
+struct gurgle_presence_t{
+    char    id[32];
+    char    last_name[16];
+    char    first_name[16];
+    char    status[16];
+    char    mood[256];
+};
+struct gurgle_subscription_t{
+    char    group[32];
+    char    nickname[32];
+    bool    sub_from;
+    bool    sub_to;
+    struct  gurgle_presence_t presence;
+};
+
+typedef struct gurgle_id_t              gurgle_id_t;
+typedef struct gurgle_presence_t        gurgle_presence_t;
+typedef struct gurgle_subscription_t    gurgle_subscription_t;
 
 class gurgle{
 public:
@@ -233,9 +250,11 @@ public:
     bool        is_id_match(const char*,const char*);
     bool        is_remote_addr_set(void);
     // query roster
+    gurgle_subscription_t*  query_roster(int &size);
     // query roster update
     // push roster update
     bool        plain_password_auth(gurgle_id_t,const char* password);
+    gurgle_presence_t* get_presence(void);
     void        set_authenticated(bool);
     int         ping(void);
     bool        check_auth_method(const char*);

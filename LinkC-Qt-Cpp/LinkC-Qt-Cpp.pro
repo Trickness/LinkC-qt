@@ -17,9 +17,11 @@ QMAKE_CXXFLAGS += -std=c++11
 SOURCES += main.cpp \
     LoginWindow.cpp \
     gurgle.cpp \  
-    MainWindow.cpp
+    MainWindow.cpp \
+    LinkcUi.cpp
 
 HEADERS  += \
     LoginWindow.h \
     gurgle.h \
-    MainWindow.h
+    MainWindow.h \
+    LinkcUi.h

@@ -460,7 +460,27 @@ bool gurgle::connect_to_server(const char *strDomain, uint16_t nPort, const char
     memset(&serverAddr,0,sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(this->__remotePort);
-    serverAddr.sin_addr.s_addr = inet_addr(this->__remoteHost);
+    uint32_t ip_32bit = inet_addr(this->__remoteHost);
+    if (ip_32bit != INADDR_NONE){
+        serverAddr.sin_addr.s_addr = ip_32bit;
+    }else{
+        struct hostent *host = gethostbyname(this->__remoteHost);
+        if(host == NULL)
+            return false;
+        if(host->h_length != 4){
+            this->write_log("Currently we do not support IPv6");
+            return false;
+        }
+        char *ip = inet_ntoa(*(struct in_addr *)*host->h_addr_list);
+        ip_32bit = inet_addr(ip);
+        if(ip_32bit == INADDR_NONE){
+            this->write_log("We can't analysis this addr");
+            delete ip;
+            return false;
+        }
+        delete ip;
+        serverAddr.sin_addr.s_addr = ip_32bit;
+    }
 #ifdef __WIN32__
     int timeout_ms = timeout * 1000;
     if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
@@ -780,4 +800,143 @@ bool gurgle::plain_password_auth(gurgle_id_t id, const char *password){
         return false;
     }
 
+}
+
+gurgle_presence_t* gurgle::get_presence(void){
+    gurgle_presence_t *presence = nullptr;
+    if(this->is_authenticated(true)==false)
+        return nullptr;
+    rapidjson::Value senddata;
+    rapidjson::Value params;
+    senddata.SetObject();
+    params.SetObject();
+    int message_id = this->create_id();
+    params.AddMember("gid",StringRef(this->__gurgle_id),this->global_document.GetAllocator());
+    senddata.AddMember("id",message_id,this->global_document.GetAllocator());
+    senddata.AddMember("cmd",StringRef("query"),this->global_document.GetAllocator());
+    senddata.AddMember("obj",StringRef("presence"),this->global_document.GetAllocator());
+    senddata.AddMember("params",params,this->global_document.GetAllocator());
+    rapidjson::Document d;
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<StringBuffer> writer(sb);
+    senddata.Accept(writer);
+    if(!this->gurgle_send(sb.GetString(),sb.GetSize()))
+        return nullptr;
+    char *recv_buf = new char[512];
+    memset(recv_buf,0,512);
+    if(!this->gurgle_recv(recv_buf,512,message_id))
+        return nullptr;
+    d.Parse(recv_buf);
+    char *log = new char[512];
+    memset(log,0,512);
+    presence = new gurgle_presence_t;
+    memset(presence,0,sizeof(gurgle_presence_t));
+    delete recv_buf;
+    if(d.HasMember("reply")){
+        params = d["reply"];
+        if(params.HasMember("last_name"))
+            if(params["last_name"].IsString())
+                strncpy(presence->last_name,params["last_name"].GetString(),params["last_name"].GetStringLength());
+        if(params.HasMember("first_name"))
+            if(params["first_name"].IsString())
+                strncpy(presence->first_name,params["first_name"].GetString(),params["first_name"].GetStringLength());
+        if(params.HasMember("status"))
+            if(params["status"].IsString())
+                strncpy(presence->status,params["status"].GetString(),params["status"].GetStringLength());
+        if(params.HasMember("mood"))
+            if(params["mood"].IsString())
+                strncpy(presence->mood,params["mood"].GetString(),params["mood"].GetStringLength());
+        if(params.HasMember("error"))
+            if(params["error"].IsString()){
+                memset(log,0,512);
+                sprintf(log,"Error %s",params["error"].GetString());
+                this->write_log(log);
+                if(params.HasMember("reason"))
+                    if(params["reason"].IsString()){
+                        memset(log,0,512);
+                        sprintf(log,"Reason %s",params["reason"].GetString());
+                        this->write_log(log);
+                    }
+                delete presence;
+                delete log;
+                return nullptr;
+            }
+    }
+    delete log;
+    return presence;
+}
+
+gurgle_subscription_t* gurgle::query_roster(int &size){
+    if(!this->is_authenticated())
+        return nullptr;
+    gurgle_subscription_t *p;
+    size = 0;
+    rapidjson::Value senddata;
+    rapidjson::Value params;
+    senddata.SetObject();
+    params.SetObject();
+    int message_id = this->create_id();
+    params.AddMember("limit",100,this->global_document.GetAllocator());
+    senddata.AddMember("id",message_id,this->global_document.GetAllocator());
+    senddata.AddMember("cmd",StringRef("query"),this->global_document.GetAllocator());
+    senddata.AddMember("obj",StringRef("roster"),this->global_document.GetAllocator());
+    senddata.AddMember("params",params,this->global_document.GetAllocator());
+    rapidjson::Document d;
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<StringBuffer> writer(sb);
+    senddata.Accept(writer);
+    if(!this->gurgle_send(sb.GetString(),sb.GetSize()))
+        return nullptr;
+    char *recv_buf = new char[512];
+    memset(recv_buf,0,512);
+    if(!this->gurgle_recv(recv_buf,512,message_id))
+        return nullptr;
+    d.Parse(recv_buf);
+    char *log = new char[512];
+    memset(log,0,512);
+    if(d.HasMember("reply")){
+        if(d["reply"].HasMember("error")){
+            if(d["reply"]["error"].IsNull() == false){
+                sprintf(log,"Error : %s",d["reply"]["error"].GetString());
+                this->write_log(log);
+                delete log;
+                delete recv_buf;
+                return nullptr;
+            }
+        }
+        if(d["reply"].HasMember("value")){
+            if(d["reply"]["value"].IsArray() == false){
+                sprintf(log,"Bad reply");
+                this->write_log(log);
+                delete log;
+                delete recv_buf;
+                return nullptr;
+            }
+        }
+        size = d["reply"]["value"].Size();
+        p = new gurgle_subscription_t[size];
+        memset(p,0,size*sizeof(gurgle_subscription_t));
+        int i;
+        for(i=0;i<size;i++){
+            if(d["reply"]["value"][i][0].IsString())
+                memcpy(p[i].presence.id,        d["reply"]["value"][i][0].GetString(),d["reply"]["value"][i][0].GetStringLength());
+            if(d["reply"]["value"][i][1].IsString())
+                memcpy(p[i].nickname,           d["reply"]["value"][i][1].GetString(),d["reply"]["value"][i][1].GetStringLength());
+            if(d["reply"]["value"][i][2].IsString())
+                memcpy(p[i].group,              d["reply"]["value"][i][2].GetString(),d["reply"]["value"][i][2].GetStringLength());
+            if(d["reply"]["value"][i][3].IsBool())
+                p[i].sub_from   =               d["reply"]["value"][i][3].GetBool();
+            if(d["reply"]["value"][i][4].IsBool())
+                p[i].sub_to     =               d["reply"]["value"][i][4].GetBool();
+            if(d["reply"]["value"][i][5].IsString())
+                memcpy(p[i].presence.last_name, d["reply"]["value"][i][5].GetString(),d["reply"]["value"][i][5].GetStringLength());
+            if(d["reply"]["value"][i][6].IsString())
+                memcpy(p[i].presence.first_name,d["reply"]["value"][i][6].GetString(),d["reply"]["value"][i][6].GetStringLength());
+            if(d["reply"]["value"][i][7].IsString())
+                memcpy(p[i].presence.status,    d["reply"]["value"][i][7].GetString(),d["reply"]["value"][i][7].GetStringLength());
+            if(d["reply"]["value"][i][8].IsString())
+                memcpy(p[i].presence.mood,      d["reply"]["value"][i][8].GetString(),d["reply"]["value"][i][8].GetStringLength());
+        }
+    }
+    return p;
 }

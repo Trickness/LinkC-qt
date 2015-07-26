@@ -7,6 +7,8 @@ LoginWindow::LoginWindow(QWidget *parent)
     :QWidget(parent){
     this->setMaximumSize(300,165);
     this->setMinimumSize(300,165);
+    this->HostLabel     = new QLabel(this);
+    this->PortLabel     = new QLabel(this);
     this->UsernameInput = new QLineEdit(this);
     this->PasswordInput = new QLineEdit(this);
     this->HostInput     = new QLineEdit(this);
@@ -15,8 +17,6 @@ LoginWindow::LoginWindow(QWidget *parent)
     this->CancelButton  = new QPushButton(this);
     this->UsernameLabel = new QLabel(this);
     this->PasswordLabel = new QLabel(this);
-    this->HostLabel     = new QLabel(this);
-    this->PortLabel     = new QLabel(this);
 
     this->HostLabel->setGeometry(30,10,50,27);
     this->HostInput->setGeometry(90,10,100,27);
@@ -36,10 +36,8 @@ LoginWindow::LoginWindow(QWidget *parent)
     this->UsernameLabel->setText(tr("Username"));
     this->PasswordLabel->setText(tr("Password"));
 
-    this->HostInput->setText("127.0.0.1");
-    this->HostInput->setDisabled(true);
+    this->HostInput->setText("localhost");
     this->PortInput->setText("40097");
-    this->PortInput->setDisabled(true);
     this->PasswordInput->setEchoMode(QLineEdit::Password);
 
     this->connect(this->SignInButton,SIGNAL(clicked(bool)),this,SLOT(SLOT_SignInButtonClicked()));
