@@ -17,10 +17,14 @@ class MainWindow : public QWidget{
 public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
-    void resizeEvent(QResizeEvent *);
+    void    resizeEvent(QResizeEvent *);
+    bool    refreshSubscribedList(void);
+    bool    refreshePresence(void);
 public slots:
     void SLOT_LoginWinSignInButtonClicked();
     void SLOT_LoginWinCancelButtonClicked();
+    void SLOT_PresenceNameUpdated(QString);
+    void SLOT_PresenceMoodUpdated(QString);
 private:
     LoginWindow *LoginW;
     gurgle      *core;

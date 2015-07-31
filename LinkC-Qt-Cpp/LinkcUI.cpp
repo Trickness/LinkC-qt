@@ -28,13 +28,15 @@ void LinkcPresenceEdit::LeaveFocus(){
         this->setContent(this->text());
 }
 
-void LinkcPresenceEdit::setContent(QString s){
+void LinkcPresenceEdit::setContent(QString s, bool NoUpdating){
     this->clear();
     this->setPlaceholderText(s);
     this->_hasContent = true;
     this->setCursorPosition(0);
     this->_Content = s;
     this->update();
+    if(NoUpdating == false)
+        emit this->ContentUpdated(s);
 }
 
 bool LinkcPresenceEdit::hasContent(){
@@ -64,15 +66,20 @@ LinkcSubscribedItem::LinkcSubscribedItem(QWidget *parent, gurgle_subscription_t 
     this->MainPresence->setFont(this->Font);
     this->Font.setPixelSize(10);
     this->Mood->setFont(this->Font);
+    this->resize(GROUP_WIDGET_WIDTH,ITEM_HEIGTH);
 
     this->HeadIcon->setStyleSheet("background-color:yellow");
     this->MainPresence->setStyleSheet("background-color:red");
 
-    this->MainPresence->setText("New 1");
+    QString  Name = "NoName";
+    if (info != nullptr){
+        Name = info->presence.last_name;
+        Name.append(info->presence.id);
+    }
+    this->MainPresence->setText(Name);
     //this->Mood->setText("New 2");
 
     this->show();
-    this->resize(GROUP_WIDGET_WIDTH,ITEM_HEIGTH);
 }
 
 LinkcSubscribedItem::~LinkcSubscribedItem(){
@@ -116,6 +123,7 @@ int LinkcSubscribedItem::getHeight(){
 
 LinkcGroupItem::LinkcGroupItem(QWidget *parent){
     this->setParent(parent);
+    setStyleSheet("background-color:yellow");
     this->setWindowFlags(Qt::FramelessWindowHint);
     this->Title     = new QLabel(this);
     this->Icon      = new QLabel(this);
@@ -134,7 +142,7 @@ LinkcGroupItem::LinkcGroupItem(QWidget *parent){
     TitleFont.setPixelSize(14);
     this->Title->setFont(TitleFont);
     this->Title->setText(tr("Unnamed group"));
-    this->setStyleSheet("background-color:white;");
+    //this->setStyleSheet("background-color:yellow;");
 
     this->resize(GROUP_WIDGET_WIDTH,GROUP_HEIGTH);
 }
@@ -232,6 +240,7 @@ void LinkcGroupItem::InsertSubscribedItem(LinkcSubscribedItem* Item,int order){
     this->resize(this->width(),this->height()+Item->getHeight());
     this->connect(Item,SIGNAL(clicked(LinkcSubscribedItem*)),this,SLOT(onItemClicked(LinkcSubscribedItem*)));
     Item->show();
+    Item->setParent(this);
     return;
 }
 
@@ -346,8 +355,8 @@ void LinkcGroupItem::hideItem(LinkcSubscribedItem *Item){
 
 LinkcGroupSelect::LinkcGroupSelect(QWidget *parent):
     QWidget(parent){
-    this->resize(GROUP_WIDGET_WIDTH,0);
-    this->setWindowFlags(Qt::FramelessWindowHint);
+    this->resize(GROUP_WIDGET_WIDTH,20);
+    //this->setWindowFlags(Qt::FramelessWindowHint);
     GroupMap     = new g_map_t;
     this->setStyleSheet("background-color:white;");
     this->refreshSelect();
@@ -392,6 +401,9 @@ void LinkcGroupSelect::onItemClicked(LinkcGroupItem *group, LinkcSubscribedItem 
 }
 
 void LinkcGroupSelect::insertGroup(LinkcGroupItem *Item, int order){
+    if(Item == nullptr)
+        return;
+    Item->setParent(this);
     if (order == -1)
         order = this->GroupMap->size();
     int h = 0;
@@ -411,8 +423,6 @@ void LinkcGroupSelect::insertGroup(LinkcGroupItem *Item, int order){
     this->resize(this->width(),h);
     this->connect(Item,SIGNAL(groupClicked(LinkcGroupItem*,bool)),this,SLOT(onGroupClicked(LinkcGroupItem*,bool)));
     this->connect(Item,SIGNAL(subscribedItemClicked(LinkcGroupItem*,LinkcSubscribedItem*)),this,SLOT(onItemClicked(LinkcGroupItem*,LinkcSubscribedItem*)));
-    Item->show();
-    return;
 }
 
 void LinkcGroupSelect::removeItemFromGroup(LinkcSubscribedItem *item, LinkcGroupItem *group){

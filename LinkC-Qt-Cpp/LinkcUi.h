@@ -26,7 +26,7 @@ public:
     void    enterEvent(QEvent*);
     void    leaveEvent(QEvent*);
     void    setDefaultText(QString);
-    void    setContent(QString);
+    void    setContent(QString,bool NoUpdating = false);
     bool    hasContent(void);
     void    clearContent(void);
 signals:

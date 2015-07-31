@@ -254,7 +254,7 @@ public:
     // query roster update
     // push roster update
     bool        plain_password_auth(gurgle_id_t,const char* password);
-    gurgle_presence_t* get_presence(void);
+    gurgle_presence_t* query_presence(void);
     void        set_authenticated(bool);
     int         ping(void);
     bool        check_auth_method(const char*);
@@ -263,7 +263,7 @@ public:
     bool        is_connected(void);
     bool        is_authenticated(bool onlineCheck = false);
     bool        connect_to_server(const char *strDomain, uint16_t nPort, const char *session,int timeout = 5);
-    int         publish_self_presence_update();
+    bool        publish_self_presence_update(gurgle_presence_t *presence = nullptr);
     int         forward_message();
     int         subscribe();
     int         unsubscribe();

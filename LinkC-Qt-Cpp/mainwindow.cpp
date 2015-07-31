@@ -37,7 +37,13 @@ MainWindow::MainWindow(QWidget *parent):
     this->setMaximumWidth(300);
     this->setMinimumWidth(200);
     this->setMinimumHeight(400);
-    //this->show();
+    this->Ui_GroupScrollArea->setParent(this);
+    this->Ui_GroupScrollArea->setGeometry(0,50,this->width(),this->height()-50);
+    this->Ui_GroupScrollArea->setVisible(true);
+    this->Ui_GroupScrollArea->setWidget(this->Ui_GroupSelect);
+
+    this->connect(this->Ui_Name,SIGNAL(ContentUpdated(QString)),this,SLOT(SLOT_PresenceNameUpdated(QString)));
+    this->connect(this->Ui_Mood,SIGNAL(ContentUpdated(QString)),this,SLOT(SLOT_PresenceMoodUpdated(QString)));
 }
 
 MainWindow::~MainWindow(){
@@ -83,4 +89,77 @@ void MainWindow::SLOT_LoginWinSignInButtonClicked(){
     this->show();
     this->LoginW->hide();
     this->core->write_log("Auth successfully");
+    if(this->refreshSubscribedList() == false){
+        this->core->write_log("Failed to refresh list");
+    }
+    if(this->refreshePresence() == false){
+        this->core->write_log("Failed to refresh presence");
+    }
+}
+
+bool MainWindow::refreshSubscribedList(){
+    int count = 0;
+    gurgle_subscription_t   *list = nullptr;
+    list = this->core->query_roster(count);
+    if(list == nullptr)
+        return false;
+    LinkcGroupItem *item = new LinkcGroupItem();
+    item->setParent(this->Ui_GroupSelect);
+    item->setGroupName(tr("Unnamed"));
+    int i;
+    for(i=0;i<count;i++){
+        item->InsertSubscribedItem(new LinkcSubscribedItem(item));
+        this->core->write_log(list[i].presence.id);
+    }
+    this->Ui_GroupSelect->insertGroup(item);
+    item->show();
+    return true;
+}
+
+bool MainWindow::refreshePresence(){
+    gurgle_presence_t *self_presence = this->core->query_presence();
+    if(self_presence == nullptr){
+        return false;
+    }
+    QString Name;
+    if(strcmp(self_presence->last_name,"") != 0){
+        Name.append(self_presence->last_name);
+        Name.append(" ");
+    }
+    if(strcmp(self_presence->first_name,"") != 0){
+        Name.append(self_presence->first_name);
+    }
+    if(Name == ""){
+        Name = "NoName";
+    }
+    this->Ui_Name->setContent(Name,true);
+    if(strcmp(self_presence->mood,"")!=0)
+        this->Ui_Mood->setContent(self_presence->mood,true);
+    return true;
+}
+
+void MainWindow::SLOT_PresenceNameUpdated(QString Name){
+    if(Name.length() > 32){
+        QMessageBox::warning(this,tr("Warning"),tr("Too long for name"));
+    }
+    gurgle_presence_t *t = new gurgle_presence_t;
+    strncpy(t->last_name,Name.toUtf8().data(),Name.length());
+    if(this->core->publish_self_presence_update(t) == false){
+        this->core->write_log("Failed to publish presence");
+        QMessageBox::warning(this,tr("Warning"),tr("Failed to publish presences"));
+        return;
+    }
+}
+
+void MainWindow::SLOT_PresenceMoodUpdated(QString Mood){
+    if(Mood.length() > 512){
+        QMessageBox::warning(this,tr("Warning"),tr("Too long for Mood"));
+    }
+    gurgle_presence_t *t = new gurgle_presence_t;
+    strncpy(t->mood,Mood.toUtf8().data(),Mood.length());
+    if(this->core->publish_self_presence_update(t) == false){
+        this->core->write_log("Failed to publish presence");
+        QMessageBox::warning(this,tr("Warning"),tr("Failed to publish presences"));
+        return;
+    }
 }

@@ -802,7 +802,7 @@ bool gurgle::plain_password_auth(gurgle_id_t id, const char *password){
 
 }
 
-gurgle_presence_t* gurgle::get_presence(void){
+gurgle_presence_t* gurgle::query_presence(void){
     gurgle_presence_t *presence = nullptr;
     if(this->is_authenticated(true)==false)
         return nullptr;
@@ -939,4 +939,53 @@ gurgle_subscription_t* gurgle::query_roster(int &size){
         }
     }
     return p;
+}
+
+bool gurgle::publish_self_presence_update(gurgle_presence_t *presence){
+    if(presence == nullptr)
+        return false;
+    rapidjson::Value senddata;
+    rapidjson::Value params;
+    senddata.SetObject();
+    params.SetObject();
+    int message_id = this->create_id();
+    if(strcmp(presence->first_name  ,"") != 0)
+        params.AddMember("first_name",StringRef(presence->first_name),this->global_document.GetAllocator());
+    if(strcmp(presence->last_name   ,"") != 0)
+        params.AddMember("last_name",StringRef(presence->last_name),this->global_document.GetAllocator());
+    if(strcmp(presence->mood        ,"") != 0)
+        params.AddMember("mood",StringRef(presence->mood),this->global_document.GetAllocator());
+    if(strcmp(presence->status      ,"") != 0)
+        params.AddMember("status",StringRef(presence->status),this->global_document.GetAllocator());
+    if(params.IsNull())
+        return false;
+    senddata.AddMember("id",message_id,this->global_document.GetAllocator());
+    senddata.AddMember("cmd",StringRef("push"),this->global_document.GetAllocator());
+    senddata.AddMember("obj",StringRef("presence"),this->global_document.GetAllocator());
+    senddata.AddMember("params",params,this->global_document.GetAllocator());
+    rapidjson::Document d;
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<StringBuffer> writer(sb);
+    senddata.Accept(writer);
+    this->write_log(sb.GetString());
+    if(!this->gurgle_send(sb.GetString(),sb.GetSize()))
+        return nullptr;
+    char *recv_buf = new char[512];
+    memset(recv_buf,0,512);
+    if(!this->gurgle_recv(recv_buf,512,message_id))
+        return nullptr;
+    d.Parse(recv_buf);
+    char *log = new char[512];
+    memset(log,0,512);
+    if(d.HasMember("reply")){
+        if(d["reply"].HasMember("error")){
+            if(d["reply"]["error"].IsNull()){
+                return true;
+            }else{
+                this->write_log(d["reply"]["error"].GetString());
+                return false;
+            }
+        }
+    }
+    return false;
 }
