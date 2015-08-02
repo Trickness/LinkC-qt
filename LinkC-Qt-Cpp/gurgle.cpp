@@ -192,7 +192,7 @@ void gurgle::__recv_lock_release(){
 
 }
 
-int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int timeout, int max_try){
+int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const char *message_type, int timeout, int max_try){
     if (buf == nullptr)
         return -1;
     if (this->is_connected() == false)
@@ -206,30 +206,51 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int tim
             break;
         this->__recv_roster += 1;
         this->__recv_door_2->door_step_into();
-        tempBuf = this->__package_list->get_data(message_id);
+        tempBuf = this->__package_list->get_data(message_id,message_type);
         this->__recv_roster -= 1;
         this->__recv_door_2->door_step_out();
         if (tempBuf != nullptr){
             maxlen = max(buf_size,strlen(tempBuf));
             memcpy(buf,tempBuf,max(buf_size,strlen(tempBuf)));
-            this->__package_list->remove(message_id);
+            this->__package_list->remove(message_id,message_type);
             tempBuf = nullptr;
             return maxlen;
         }
+        if(timeout == 0)
+            return 0;
     }
+    this->__recv_door_2->door_open();
     if (this->is_connected() == false){
         this->__recv_lock_release();
         this->write_log("Connection has not been established!",GURGLE_LOG_MODE_ERROR);
         return -1;
     }
+    if(timeout != 0){
 #ifdef __WIN32__
-    int timeout_ms = timeout * 1000;
-    if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
-        this->__recv_lock_release();
-        this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
-        return -1;
-    }
+        int timeout_ms = timeout * 1000;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
+            this->__recv_lock_release();
+            this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
+            return -1;
+        }
 #endif
+    }else{
+        tempBuf = this->__package_list->get_data(message_id,message_type);
+        if (tempBuf != nullptr){
+            maxlen = max(buf_size,strlen(tempBuf));
+            memcpy(buf,tempBuf,max(buf_size,strlen(tempBuf)));
+            this->__package_list->remove(message_id);
+            tempBuf = nullptr;
+            this->__recv_lock_release();
+            return maxlen;
+        }
+        int timeout_ms = 500;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
+            this->__recv_lock_release();
+            this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
+            return -1;
+        }
+    }
     int recv_size = 0;
     int n_try = 0;
     char* recvBuf = new char[buf_size];
@@ -240,17 +261,18 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int tim
     int count       = 0;
     int id          = 0;
     Document        recv_json;
-    StringBuffer    sb;
-    PrettyWriter<StringBuffer> writer(sb);
     char *return_buf = nullptr;
+    char *json_obj = new char[128];
+    bool    is_obj_null = true;
     while (n_try < max_try){
-        tempBuf = this->__package_list->get_data(message_id);
+        tempBuf = this->__package_list->get_data(message_id,message_type);
         if (tempBuf != nullptr){
             maxlen = max(buf_size,strlen(tempBuf));
             memcpy(buf,tempBuf,max(buf_size,strlen(tempBuf)));
             this->__package_list->remove(message_id);
             tempBuf = nullptr;
             this->__recv_lock_release();
+            delete json_obj;
             return maxlen;
         }
         memset(recvBuf,0,buf_size);
@@ -261,12 +283,14 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int tim
         }else if(recv_size < 0){
             this->write_log("Recv error",GURGLE_LOG_MODE_ERROR);
             this->__recv_lock_release();
+            delete json_obj;
             return -1;
         }else if(recv_size == 0){
             this->write_log("Connection was closed by peer");
             this->__is_authenticated= false;
             this->__is_connected    = false;
-            this->__recv_lock_release();;
+            this->__recv_lock_release();
+            delete json_obj;
             return 0;
         }
         start = 0;
@@ -295,14 +319,8 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int tim
                 id = recv_json["id"].GetInt();
             else
                 id = 0;
-            if(message_id == 0){
-                if(return_buf == nullptr){
-                    return_buf = tempBuf;
-                    continue;
-                }
-            }
             if (recv_json.HasMember("cmd")){
-                if (strcmp(recv_json.GetString(),"kill") == 0){
+                if (strcmp(recv_json["cmd"].GetString(),"kill") == 0){
                     char *error  = new char[128];
                     char *reason = new char[128];
                     memset(error,0,128);
@@ -330,22 +348,51 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int tim
                     this->__is_connected = false;
                     this->__is_authenticated = false;
                     this->__recv_lock_release();
+                    delete json_obj;
                     return -1;
                 }
             }
+            is_obj_null = true;
+            if (recv_json.HasMember("obj")){
+                if(recv_json["obj"].IsString()){
+                    memset(json_obj,0,128);
+                    strcpy(json_obj,StringRef(recv_json["obj"].GetString()));
+                    is_obj_null = false;
+                }
+            }
             if (message_id == 0){
-                if(return_buf != nullptr)
-                    this->__package_list->insert(tempBuf,id);
-                else
-                    return_buf = tempBuf;
-                continue;
+                if(return_buf != nullptr){
+                    if(is_obj_null)
+                        this->__package_list->insert(tempBuf,id,nullptr);
+                    else
+                        this->__package_list->insert(tempBuf,id,json_obj);
+                }else{
+                    if(is_obj_null){
+                        if(message_type == nullptr)
+                            return_buf = tempBuf;
+                        else
+                            this->__package_list->insert(tempBuf,id,nullptr);
+                    }else{
+                        if(message_type != nullptr){
+                            if(strcmp(json_obj,message_type) == 0){
+                                return_buf = tempBuf;
+                                continue;
+                            }
+                        }
+                        this->__package_list->insert(tempBuf,id,json_obj);
+                    }
+                    continue;
+                }
             }else if((int)message_id == id){
                 if(return_buf != nullptr)
                     this->write_log("WHAT HAPPEND?");
                 return_buf = tempBuf;
                 continue;
             }else{
-                this->__package_list->insert(tempBuf,id);
+                if(is_obj_null)
+                    this->__package_list->insert(tempBuf,id,nullptr);
+                else
+                    this->__package_list->insert(tempBuf,id,json_obj);
             }
         }
         if(return_buf != nullptr){
@@ -354,16 +401,19 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, int tim
                 this->write_log("Buffer overload");
                 delete tempList;
                 this->__recv_lock_release();
+                delete json_obj;
                 return 0;
             }
             memcpy(buf,return_buf,len);
             buf[len] = 0;
             delete tempList;
             this->__recv_lock_release();
+            delete json_obj;
             return len;
         }
     }
     this->__recv_lock_release();
+    delete json_obj;
     return 0;
 }
 
@@ -513,8 +563,6 @@ bool gurgle::connect_to_server(const char *strDomain, uint16_t nPort, const char
     params.AddMember("encript","disabled",d.GetAllocator());
     if(session != nullptr)
         params.AddMember("session",StringRef(session),d.GetAllocator());
-    else
-        params.AddMember("session",this->nullVar,d.GetAllocator());
     send_json.AddMember("id",message_id,d.GetAllocator());
     send_json.AddMember("cmd","connect",d.GetAllocator());
     send_json.AddMember("obj","session",d.GetAllocator());
@@ -717,6 +765,8 @@ bool gurgle::is_authenticated(bool onlineCheck){
     if(!this->gurgle_recv(recv_buf,512,message_id))
         return false;
     d.Parse(recv_buf);
+    delete recv_buf;
+    recv_buf = nullptr;
     if(d.HasMember("params"))
         if(d["params"].HasMember("auth_status"))
             if(d["params"]["auth_status"].IsString())
@@ -766,6 +816,8 @@ bool gurgle::plain_password_auth(gurgle_id_t id, const char *password){
     d.Parse(recv_buf);
     char *log = new char[512];
     memset(log,0,512);
+    //delete recv_buf;
+    //recv_buf = nullptr;
     if(d.HasMember("reply")){
         if(d["reply"].HasMember("error")){
             if(d["reply"]["error"].IsString()){
@@ -938,6 +990,7 @@ gurgle_subscription_t* gurgle::query_roster(int &size){
                 memcpy(p[i].presence.mood,      d["reply"]["value"][i][8].GetString(),d["reply"]["value"][i][8].GetStringLength());
         }
     }
+    delete recv_buf;
     return p;
 }
 
@@ -975,17 +1028,117 @@ bool gurgle::publish_self_presence_update(gurgle_presence_t *presence){
     if(!this->gurgle_recv(recv_buf,512,message_id))
         return nullptr;
     d.Parse(recv_buf);
-    char *log = new char[512];
-    memset(log,0,512);
     if(d.HasMember("reply")){
         if(d["reply"].HasMember("error")){
             if(d["reply"]["error"].IsNull()){
+                delete recv_buf;
                 return true;
             }else{
                 this->write_log(d["reply"]["error"].GetString());
+                delete recv_buf;
                 return false;
             }
         }
     }
+    delete recv_buf;
+    return false;
+}
+
+bool gurgle::forward_message(char* UserId, char* Message){
+    if(UserId == nullptr || Message == nullptr){
+        return false;
+    }
+    rapidjson::Value senddata;
+    rapidjson::Value params;
+    senddata.SetObject();
+    params.SetObject();
+    int message_id = this->create_id();
+    params.AddMember("to",StringRef(UserId),this->global_document.GetAllocator());
+    params.AddMember("message",StringRef(Message),this->global_document.GetAllocator());
+    senddata.AddMember("id",message_id,this->global_document.GetAllocator());
+    senddata.AddMember("cmd",StringRef("forward"),this->global_document.GetAllocator());
+    senddata.AddMember("obj",StringRef("message"),this->global_document.GetAllocator());
+    senddata.AddMember("params",params,this->global_document.GetAllocator());
+    rapidjson::Document d;
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<StringBuffer> writer(sb);
+    senddata.Accept(writer);
+    if(!this->gurgle_send(sb.GetString(),sb.GetSize()))
+        return false;
+    char *recv_buf = new char[512];
+    memset(recv_buf,0,512);
+    if(!this->gurgle_recv(recv_buf,512,message_id))
+        return false;
+    d.Parse(recv_buf);
+    char *log = new char[512];
+    memset(log,0,512);
+    delete recv_buf;
+    if(d.HasMember("reply")){
+        if(d["reply"].HasMember("error")){
+            if(d["reply"]["error"].IsString()){
+                this->write_log(d["reply"]["error"].GetString());
+                return false;
+            }else if(d["reply"]["error"].IsNull())
+                return true;
+            this->write_log("Unknown Error");
+            return false;
+        }
+    }
+    return false;
+}
+
+bool gurgle::update_roster(char *id, char *nickname, char *group, int sub_flag){
+    if(id == nullptr)
+        return false;
+    rapidjson::Value senddata;
+    rapidjson::Value params;
+    senddata.SetObject();
+    params.SetObject();
+    int message_id = this->create_id();
+    if(nickname)
+        params.AddMember("nickname",StringRef(nickname),this->global_document.GetAllocator());
+    if(group)
+        params.AddMember("groups",StringRef(group),this->global_document.GetAllocator());
+    if(sub_flag == SUBSCRIBE)
+        params.AddMember("sub_to",true,this->global_document.GetAllocator());
+    else if(sub_flag == DISSUBSCRIBE)
+        params.AddMember("sub_to",false,this->global_document.GetAllocator());
+    if(params.IsNull())
+        return false;
+    params.AddMember("gid",StringRef(id),this->global_document.GetAllocator());
+    senddata.AddMember("id",message_id,this->global_document.GetAllocator());
+    senddata.AddMember("cmd",StringRef("update"),this->global_document.GetAllocator());
+    senddata.AddMember("obj",StringRef("roster"),this->global_document.GetAllocator());
+    senddata.AddMember("params",params,this->global_document.GetAllocator());
+    rapidjson::Document d;
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<StringBuffer> writer(sb);
+    senddata.Accept(writer);
+    if(!this->gurgle_send(sb.GetString(),sb.GetSize()))
+        return nullptr;
+    char *recv_buf = new char[512];
+    memset(recv_buf,0,512);
+    if(!this->gurgle_recv(recv_buf,512,message_id))
+        return nullptr;
+    d.Parse(recv_buf);
+    char *log = new char[512];
+    memset(log,0,512);
+    if(d.HasMember("reply")){
+        if(d["reply"].HasMember("error"))
+            if(d["reply"]["error"].IsNull())
+                return true;
+    }
+    return false;
+}
+
+bool gurgle::is_id_match(const char *idA, const char *idB){
+    gurgle_id_t idA_s,idB_s;
+    idA_s = this->analyse_full_id(idA);
+    idB_s = this->analyse_full_id(idB);
+    if (strcmp(idA_s.username,"")==0 || strcmp(idB_s.username,"")==0)
+        return false;
+    if(strcmp(idA_s.username,idB_s.username) == 0)
+        if(strcmp(idA_s.domain,idB_s.domain) == 0)
+            return true;
     return false;
 }

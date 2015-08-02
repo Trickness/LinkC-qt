@@ -2,8 +2,11 @@
 
 MainWindow::MainWindow(QWidget *parent):
     QWidget(parent){
-    this->core      = new gurgle();
-    this->LoginW    = new LoginWindow();
+    this->core              = new gurgle();
+    this->LoginW            = new LoginWindow();
+    this->MessageList       = new packageList();
+    this->SubscribeDialog   = new LinkcSubscribeDialog(NULL,this->core);
+    this->MsgReceiver       = new MessageReceiver(this,this->core);
     this->connect(LoginW,SIGNAL(SIGN_SignInButtonClicked()),this,SLOT(SLOT_LoginWinSignInButtonClicked()));
     this->connect(LoginW,SIGNAL(SIGN_CancelButtonClicked()),this,SLOT(SLOT_LoginWinCancelButtonClicked()));
     this->LoginW->show();
@@ -21,6 +24,8 @@ MainWindow::MainWindow(QWidget *parent):
     this->Ui_Mood               = new LinkcPresenceEdit;
     this->Ui_GroupScrollArea    = new QScrollArea(this);
     this->Ui_GroupSelect        = new LinkcGroupSelect(this->Ui_GroupScrollArea);
+    this->Ui_SubscribedButton   = new QPushButton(this);
+    this->Ui_SubscribedButton->setText(tr("Subscribe"));
     this->Ui_PresenceBase->setLayout(this->Ui_PresenceBaseLayout);
     this->Ui_PresenceWidget->setStyleSheet("background-color:white");
     this->Ui_HeadWidget->setStyleSheet("background-color:yellow");
@@ -44,26 +49,41 @@ MainWindow::MainWindow(QWidget *parent):
 
     this->connect(this->Ui_Name,SIGNAL(ContentUpdated(QString)),this,SLOT(SLOT_PresenceNameUpdated(QString)));
     this->connect(this->Ui_Mood,SIGNAL(ContentUpdated(QString)),this,SLOT(SLOT_PresenceMoodUpdated(QString)));
+    this->connect(this->Ui_GroupSelect,SIGNAL(itemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*)),this,SLOT(SLOT_ItemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*)));
+    this->connect(this->Ui_SubscribedButton,SIGNAL(clicked(bool)),this,SLOT(SLOT_SubscribedButtonClicked(bool)));
+    this->connect(this->SubscribeDialog,SIGNAL(subscribeDone()),this,SLOT(SLOT_RefreshSubscribeList()));
+    this->connect(this->MsgReceiver,SIGNAL(messageReceived(QString,QString,int)),this,SLOT(SLOT_MessageReceived(QString,QString,int)));
+
+    this->setWindowTitle(tr("LinkC"));
 }
 
 MainWindow::~MainWindow(){
     delete this->core;
     delete this->LoginW;
+    delete this->MessageList;
+    delete this->SubscribeDialog;
     delete this->Ui_Mood;
     delete this->Ui_Name;
     delete this->Ui_PresenceLayout;
     delete this->Ui_PresenceWidget;
     delete this->Ui_PresenceBaseLayout;
     delete this->Ui_PresenceBase;
+    delete this->Ui_SubscribedButton;
 }
 void MainWindow::resizeEvent(QResizeEvent *){
     this->Ui_PresenceBase->setGeometry(0,0,this->width(),50);
     this->Ui_HeadWidget->setGeometry(this->width()-50,0,50,50);
-    this->Ui_GroupScrollArea->setGeometry(0,50,this->width(),this->height()-50);
+    this->Ui_GroupScrollArea->setGeometry(0,50,this->width(),this->height()-100);
+    this->Ui_GroupSelect->resize(this->width()-10,this->Ui_GroupSelect->height());
+    this->Ui_SubscribedButton->setGeometry(10,this->Ui_GroupScrollArea->y()+this->Ui_GroupScrollArea->height()+5,150,30);
 }
 
 void MainWindow::SLOT_LoginWinCancelButtonClicked(){
     exit(0);
+}
+
+void MainWindow::SLOT_SubscribedButtonClicked(bool){
+    this->SubscribeDialog->show();
 }
 
 void MainWindow::SLOT_LoginWinSignInButtonClicked(){
@@ -95,6 +115,26 @@ void MainWindow::SLOT_LoginWinSignInButtonClicked(){
     if(this->refreshePresence() == false){
         this->core->write_log("Failed to refresh presence");
     }
+    char *buf = new char[512];
+    char *tmpBuf = new char[512];
+    char *tmpBuf2;
+    rapidjson::Document d;
+    while(1){
+        memset(buf,0,512);
+        memset(tmpBuf,0,512);
+        if(this->core->gurgle_recv(buf,512,0,"message",0)<=0)
+            break;
+        d.Parse(buf);
+        if(d.IsNull())
+            break;
+        memset(buf,0,512);
+        tmpBuf2 = new char[512];
+        memset(tmpBuf2,0,512);
+        strncpy(tmpBuf2,d["params"]["message"].GetString(),d["params"]["message"].GetStringLength());
+        strncpy(tmpBuf,d["params"]["from"].GetString(),d["params"]["from"].GetStringLength());
+        this->MessageList->insert(tmpBuf2,d["id"].GetInt(),tmpBuf);
+    }
+    this->MsgReceiver->start();
 }
 
 bool MainWindow::refreshSubscribedList(){
@@ -105,11 +145,9 @@ bool MainWindow::refreshSubscribedList(){
         return false;
     LinkcGroupItem *item = new LinkcGroupItem();
     item->setParent(this->Ui_GroupSelect);
-    item->setGroupName(tr("Unnamed"));
     int i;
     for(i=0;i<count;i++){
-        item->InsertSubscribedItem(new LinkcSubscribedItem(item));
-        this->core->write_log(list[i].presence.id);
+        item->InsertSubscribedItem(new LinkcSubscribedItem(item,&list[i]));
     }
     this->Ui_GroupSelect->insertGroup(item);
     item->show();
@@ -130,7 +168,7 @@ bool MainWindow::refreshePresence(){
         Name.append(self_presence->first_name);
     }
     if(Name == ""){
-        Name = "NoName";
+        Name = self_presence->id;
     }
     this->Ui_Name->setContent(Name,true);
     if(strcmp(self_presence->mood,"")!=0)
@@ -162,4 +200,91 @@ void MainWindow::SLOT_PresenceMoodUpdated(QString Mood){
         QMessageBox::warning(this,tr("Warning"),tr("Failed to publish presences"));
         return;
     }
+}
+
+void MainWindow::SLOT_ItemDoubleClicked(LinkcGroupItem *, LinkcSubscribedItem *item){
+    if(item->ChatDialog != nullptr){
+        item->ChatDialog->show();
+        item->ChatDialog->setFocus();
+        return;
+    }
+    item->ChatDialog = new LinkcChatDialog(NULL,this->core,&(item->getInfo()->presence));
+    char *Message = nullptr;
+    while(1){
+        Message = this->MessageList->get_data(0,item->getInfo()->presence.id);
+        if(Message == nullptr)
+            break;
+        item->ChatDialog->setMessage(Message);
+        this->MessageList->remove(0,item->getInfo()->presence.id);
+    }
+    Message = nullptr;
+    item->ChatDialog->show();
+}
+
+void MainWindow::SLOT_RefreshSubscribeList(){
+    if(this->refreshSubscribedList() == false)
+        QMessageBox::warning(this,tr("Warning"),tr("Failed to refresh subscribed list"));
+}
+
+void MainWindow::SLOT_MessageReceived(QString User, QString Msg,int id){
+    LinkcSubscribedItem *tmpItem = this->Ui_GroupSelect->findItem(User);
+    if(tmpItem){
+        if(tmpItem->ChatDialog){
+            tmpItem->ChatDialog->setMessage(Msg);
+            this->MsgReceiver->messageSaveDone();
+            return;
+        }
+    }
+    this->MessageList->insert(Msg.toUtf8().data(),id,User.toUtf8().data());
+    this->MsgReceiver->messageSaveDone();
+}
+
+
+MessageReceiver::MessageReceiver(QObject *parent, gurgle *_core){
+    this->setParent(parent);
+    if(_core != nullptr)
+        this->core = _core;
+    else
+        this->core = nullptr;
+    this->recvBuf = new char[1024];
+    this->flag = true;
+}
+
+MessageReceiver::~MessageReceiver(){
+    delete this->recvBuf;
+}
+
+void MessageReceiver::run(){
+    if(this->core == nullptr)
+        return;
+    int recved = 0;
+    this->flag = true;
+    rapidjson::Document d;
+    QString Id,Message;
+    while(1){
+        while(!this->flag); // wait MainThread to save message
+        recved = this->core->gurgle_recv(recvBuf,1024,0,"message",5,10);
+        if(!(recved>0)){
+            if(this->core->is_connected() == false)
+                break;
+            continue;
+        }
+        d.Parse(recvBuf);
+        if(d.IsNull())
+            continue;
+        if(d["params"].HasMember("from"))
+            if(d["params"]["from"].IsString())
+                Id = d["params"]["from"].GetString();
+        if(d["params"].HasMember("message"))
+            if(d["params"]["message"].IsString())
+                Message = d["params"]["message"].GetString();
+        if(Message!="" && Id!=""){
+            this->flag = false;
+            emit this->messageReceived(Id,Message,d["id"].GetInt());
+        }
+    }
+}
+
+void MessageReceiver::messageSaveDone(){
+    this->flag = true;
 }

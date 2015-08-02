@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <thread>
 #include <string>
+#include <iostream>
 
 #include "rapidjson/include/rapidjson/document.h"
 #include "rapidjson/include/rapidjson/writer.h"
@@ -22,7 +23,7 @@
 #include "rapidjson/include/rapidjson/prettywriter.h"
 
 using namespace rapidjson;
-
+using namespace std;
 #define GURGLE_CLIENT           1
 #define GURGLE_VERSION          "Unusable"
 #define GURGLE_LOG_LEVEL        3
@@ -35,7 +36,8 @@ public:
     class packageNode*  nextNode;
     uint32_t            packageID;
     char                *data;
-    packageNode(char* nodeData){
+    char                *extData;
+    packageNode(char *nodeData){
         packageID = 0;
         nextNode  = nullptr;
         this->data= nullptr;
@@ -44,6 +46,7 @@ public:
         }else{
             this->data =nullptr;
         }
+        this->extData = nullptr;
     }
 };
 
@@ -66,9 +69,16 @@ public:
         delete curNode;
         return;
     }
-    void insert(char* newData,uint32_t packageID){
+    void insert(char* newData,uint32_t packageID,const char* extData = nullptr){
         packageNode *newNode = new packageNode(newData);
         newNode->packageID = packageID;
+        if(extData != nullptr){
+            int len = strlen(extData);
+            newNode->extData = new char[len+1];
+            memset(newNode->extData,0,len+1);
+            memcpy(newNode->extData,extData,len+1);
+            newNode->extData[len] = 0;
+        }
         if (this->root == nullptr){
             this->root = newNode;
             this->size += 1;
@@ -86,17 +96,42 @@ public:
         this->root = nullptr;
     }
 
-    char* get_data(uint32_t packageID){
+    char* get_data(uint32_t packageID,const char* extData = nullptr){
         if (this->size == 0){
             return nullptr;
         }else{
+            string strA;
+            string strB;
+            int a,b;
             packageNode *tempNode = this->root;
             int i;
             for(i=0;i<this->size;i++){
-                if (tempNode->packageID == packageID)
-                    return tempNode->data;
-                else
-                    tempNode = tempNode->nextNode;
+                if (tempNode->packageID == packageID || packageID == 0){
+                    if(extData == nullptr)
+                        return tempNode->data;
+                    else if(packageID != 0){
+                        return tempNode->data;
+                    }else{
+                        if(tempNode->extData != nullptr){
+                            strA=extData;
+                            strB=tempNode->extData;
+                            a = strA.find_first_of('/');
+                            b = strB.find_first_of('/');
+                            if(a>0 && b>0){
+                                if(a != b){
+                                    tempNode = tempNode->nextNode;
+                                    continue;
+                                }else{
+                                    if(strcmp(tempNode->extData,extData) == 0)
+                                        return tempNode->data;
+                                }
+                            }
+                            if(strncmp(tempNode->extData,extData,max(a,b)) == 0)
+                                return tempNode->data;
+                        }
+                    }
+                }
+                tempNode = tempNode->nextNode;
             }
         }
         return nullptr;
@@ -117,7 +152,7 @@ public:
         return returnValue;
     }
 
-    bool remove(uint32_t packageID){
+    bool remove(uint32_t packageID,const char *extData = nullptr){
         if (this->size == 0)
             return false;
         if (this->root->packageID == packageID){
@@ -127,17 +162,86 @@ public:
             this->root = tempNode;
             return true;
         }
+        if (packageID == 0){
+            if (extData == nullptr){
+                packageNode *tempNode = this->root->nextNode;
+                delete this->root;
+                this->size -= 1;
+                this->root = tempNode;
+                return true;
+            }else{
+                if(this->root->extData != nullptr){
+                    if(this->root->extData != nullptr){
+                        int a,b;
+                        string strA=extData;
+                        string strB=this->root->extData;
+                        a = strA.find_first_of('/');
+                        b = strB.find_first_of('/');
+                        if(a>0 && b>0){
+                            if(a == b){
+                                if(strcmp(this->root->extData,extData) == 0)
+                                    return this->root->data;
+                            }
+                        }else{
+                            if(strncmp(this->root->extData,extData,max(a,b)) == 0){
+                                packageNode *tempNode = this->root->nextNode;
+                                delete this->root;
+                                this->size -= 1;
+                                this->root = tempNode;
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         packageNode *curNode = this->root;
         while (curNode->nextNode != nullptr){
             if (curNode->nextNode->packageID == packageID){
-                packageNode *tempNode = curNode->nextNode;
-                curNode->nextNode = curNode->nextNode->nextNode;
-                delete tempNode;
-                this->size -= 1;
-                return true;
-            }else{
-                curNode = curNode->nextNode;
+                if(packageID != 0){
+                    packageNode *tempNode = curNode->nextNode;
+                    curNode->nextNode = curNode->nextNode->nextNode;
+                    delete tempNode;
+                    this->size -= 1;
+                    return true;
+                }else{
+                    if(extData != nullptr){
+                        if(curNode->nextNode->extData != nullptr){
+                            int a,b;
+                            string strA=extData;
+                            string strB=curNode->extData;
+                            a = strA.find_first_of('/');
+                            b = strB.find_first_of('/');
+                            if(a>0 && b>0){
+                                if(a == b){
+                                    if(strcmp(curNode->extData,extData) == 0){
+                                        packageNode *curNode = curNode->nextNode;
+                                        curNode->nextNode = curNode->nextNode->nextNode;
+                                        delete curNode;
+                                        this->size -= 1;
+                                        return true;
+                                    }
+                                }
+                            }else{
+                                if(strncmp(curNode->extData,extData,max(a,b)) == 0){
+                                    packageNode *curNode = curNode->nextNode;
+                                    curNode->nextNode = curNode->nextNode->nextNode;
+                                    delete curNode;
+                                    this->size -= 1;
+                                    return true;
+                                }
+                            }
+                        }
+                    }else{
+                        packageNode *tempNode = curNode->nextNode;
+                        curNode->nextNode = curNode->nextNode->nextNode;
+                        delete tempNode;
+                        this->size -= 1;
+                        return true;
+                    }
+                }
             }
+            curNode = curNode->nextNode;
         }
         return false;
     }
@@ -216,6 +320,10 @@ typedef struct gurgle_id_t              gurgle_id_t;
 typedef struct gurgle_presence_t        gurgle_presence_t;
 typedef struct gurgle_subscription_t    gurgle_subscription_t;
 
+#define DISSUBSCRIBE    -1
+#define SUB_DONT_CHANGE 0
+#define SUBSCRIBE       1
+
 class gurgle{
 public:
     gurgle(int mode = GURGLE_CLIENT);
@@ -228,7 +336,7 @@ public:
     char*       create_terminal_id(void);
     void        write_log(const char *log, int mode = GURGLE_LOG_MODE_COMMON, int level = 0);
     void        __recv_lock_release(void);
-    int         gurgle_recv(char* buf, size_t buf_size = 512, uint32_t message_id = 0, int timeout = 5, int max_try = 2);
+    int         gurgle_recv(char* buf, size_t buf_size = 512, uint32_t message_id = 0,const char* message_type = nullptr, int timeout = 5, int max_try = 2);
     int         gurgle_send(const char* buf, size_t len);
     void        set_remote_host(const char*);
     void        set_remote_prot(uint16_t);
@@ -253,6 +361,7 @@ public:
     gurgle_subscription_t*  query_roster(int &size);
     // query roster update
     // push roster update
+    bool        update_roster(char *id,char* nickname,char* group,int sub_flag);
     bool        plain_password_auth(gurgle_id_t,const char* password);
     gurgle_presence_t* query_presence(void);
     void        set_authenticated(bool);
@@ -264,7 +373,7 @@ public:
     bool        is_authenticated(bool onlineCheck = false);
     bool        connect_to_server(const char *strDomain, uint16_t nPort, const char *session,int timeout = 5);
     bool        publish_self_presence_update(gurgle_presence_t *presence = nullptr);
-    int         forward_message();
+    bool        forward_message(char* UserId = nullptr, char* Message = nullptr);
     int         subscribe();
     int         unsubscribe();
     int         disconnect_from_remote(const char *reason=nullptr,uint32_t message_id=0);

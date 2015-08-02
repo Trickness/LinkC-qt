@@ -8,6 +8,9 @@
 #include <QFocusFrame>
 #include <QLabel>
 #include <QMap>
+#include <QPushButton>
+#include <QTextEdit>
+#include <QMessageBox>
 #include <stdint.h>
 #include "gurgle.h"
 
@@ -39,6 +42,47 @@ private:
     QString _Content;
 };
 
+class LinkcChatDialog : public QWidget{
+    Q_OBJECT
+public:
+    explicit        LinkcChatDialog(QWidget *parent = 0, gurgle *_core = nullptr, gurgle_presence_t *_presence = nullptr);
+                   ~LinkcChatDialog();
+    void            resizeEvent(QResizeEvent*);
+    void            setCore(gurgle *_core = nullptr);
+    void            setPresence(gurgle_presence_t *_presence = nullptr);
+    void            setMessage(QString);
+public slots:
+    void            onSendClicked(bool);
+    void            onExitClicked(bool);
+private:
+    gurgle          *core;
+    gurgle_presence_t *presence;
+    QTextEdit       *Ui_History;
+    QTextEdit       *Ui_Input;
+    QPushButton     *Ui_Send;
+    QPushButton     *Ui_Exit;
+};
+
+class LinkcSubscribeDialog : public QWidget{
+    Q_OBJECT
+public:
+    explicit        LinkcSubscribeDialog(QWidget *parent = 0, gurgle *_core = nullptr);
+                   ~LinkcSubscribeDialog();
+    void            setCore(gurgle *_core = nullptr);
+    void            resizeEvent(QResizeEvent *);
+signals:
+    void            subscribeDone(void);
+public slots:
+    void            onAcceptClicked(bool);
+    void            onBackClicked(bool);
+private:
+    QLineEdit       *Ui_IdEditor;
+    QPushButton     *Ui_BackButton;
+    QPushButton     *Ui_AccpetButton;
+    QLabel          *Ui_IdLabel;
+    gurgle          *core;
+};
+
 
 class LinkcSubscribedItem : public QWidget{
     Q_OBJECT
@@ -46,20 +90,26 @@ public:
     explicit    LinkcSubscribedItem(QWidget *parent = 0,gurgle_subscription_t *info = NULL);
                 ~LinkcSubscribedItem();
     void        mousePressEvent(QMouseEvent *);
+    void        mouseDoubleClickEvent(QMouseEvent*);
     void        unClicked(void);
     void        setSInfo(gurgle_subscription_t *info = nullptr);
     void        resizeEvent(QResizeEvent *);
     LinkcSubscribedItem *getPrev(void);
     LinkcSubscribedItem *getNext(void);
+    gurgle_subscription_t   *getInfo(void);
     void        setPrev(LinkcSubscribedItem*);
     void        setNext(LinkcSubscribedItem*);
     int         getHeight(void);
+    char*       getId(void);
     uint8_t     Flag;
     bool        shown;
     bool        subShown;
     bool        doInfoSet;
+    bool        chatDialogVisible;
+    LinkcChatDialog *ChatDialog;
 signals:
     void        clicked(LinkcSubscribedItem*);
+    void        doubleclicked(LinkcSubscribedItem*);
 public slots:
 private:
     gurgle_subscription_t *Subscription;
@@ -95,11 +145,14 @@ public:
     void            setPrev(LinkcGroupItem*);
     void            setNext(LinkcGroupItem*);
     LinkcSubscribedItem* getNextSubscribedItem(LinkcSubscribedItem* Item = nullptr);
+    LinkcSubscribedItem* findItem(QString Id);
 signals:
     void            groupClicked(LinkcGroupItem*,bool spreaded);
     void            subscribedItemClicked(LinkcGroupItem*,LinkcSubscribedItem*);
+    void            subscribedItemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*);
 public slots:
     void            onItemClicked(LinkcSubscribedItem*);
+    void            onItemDoubleClicked(LinkcSubscribedItem*);
 private:
     QLabel          *Icon;
     QLabel          *Title;
@@ -123,17 +176,19 @@ public:
     void            insertGroup(LinkcGroupItem*,int order = -1);
     void            removeItemFromGroup(LinkcSubscribedItem*,LinkcGroupItem*);
     void            refreshSize(void);
+    LinkcSubscribedItem* findItem(QString Id);
 signals:
     void            groupClicked(LinkcGroupItem*);
     void            itemClicked(LinkcGroupItem*, LinkcSubscribedItem*);
+    void            itemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*);
 public slots:
     void            onGroupClicked(LinkcGroupItem*,bool);
     void            onItemClicked(LinkcGroupItem*, LinkcSubscribedItem*);
+    void            onItemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*);
     void            refreshSelect(void);
     void            clearSelect(void);
 private:
     g_map_t         *GroupMap;
 };
-
 #endif // LINKC_UI
 
