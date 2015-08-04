@@ -324,7 +324,7 @@ typedef struct gurgle_id_t              gurgle_id_t;
 typedef struct gurgle_presence_t        gurgle_presence_t;
 typedef struct gurgle_subscription_t    gurgle_subscription_t;
 
-#define DISSUBSCRIBE    -1
+#define UNSUBSCRIBE    -1
 #define SUB_DONT_CHANGE 0
 #define SUBSCRIBE       1
 
@@ -366,6 +366,7 @@ public:
     // query roster update
     // push roster update
     bool        update_roster(char *id,char* nickname,char* group,int sub_flag);
+    char**      query_server_alias(int &count);
     bool        plain_password_auth(gurgle_id_t,const char* password);
     gurgle_presence_t* query_presence(void);
     void        set_authenticated(bool);
@@ -406,6 +407,8 @@ private:
     door_lock * __recv_door_1;
     door_lock * __recv_door_2;
     char        __session[32];
+    char**      __alias;
+    int         __alias_size;
 
     //C++ client Only vars
     rapidjson::Document global_document;

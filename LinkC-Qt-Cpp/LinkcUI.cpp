@@ -187,6 +187,10 @@ LinkcGroupItem::~LinkcGroupItem(){
     delete this->Icon;
 }
 
+void LinkcGroupItem::setCore(gurgle *_core){
+    this->core = _core;
+}
+
 void LinkcGroupItem::setGroupName(QString name){
     this->Title->setText(name);
 }
@@ -392,33 +396,17 @@ void LinkcGroupItem::hideItem(LinkcSubscribedItem *Item){
 
 LinkcSubscribedItem* LinkcGroupItem::findItem(QString Id){
     s_map_t::iterator i;
-    int a,b;
-    string strA;
-    string strB;
     char *idData = new char[256];
     memset(idData,0,256);
     memcpy(idData,Id.toUtf8().data(),Id.toUtf8().length());
     char *nodeData = nullptr;
-    strB = Id.toUtf8().data();
     if(this->ItemMap->isEmpty() == false){
         i = this->ItemMap->begin();
         while(i != this->ItemMap->end()){
             nodeData = i.value()->getId();
-            strA=nodeData;
-            a = strA.find_first_of('/');
-            b = strB.find_first_of('/');
-            if(a>0 && b>0){
-                if(a == b){
-                    if(strcmp(idData,nodeData) == 0){
-                        delete idData;
-                        return i.value();
-                    }
-                }
-            }else{
-                if(strncmp(idData,nodeData,max(a,b)) == 0){
-                    delete idData;
-                    return i.value();
-                }
+            if(this->core->is_id_match(nodeData,idData) == true){
+                delete idData;
+                return i.value();
             }
             i++;
         }
@@ -435,6 +423,7 @@ LinkcGroupSelect::LinkcGroupSelect(QWidget *parent):
     GroupMap     = new g_map_t;
     this->setStyleSheet("background-color:white;");
     this->refreshSelect();
+    this->currentSelectedSubscribedItem = nullptr;
 }
 
 LinkcGroupSelect::~LinkcGroupSelect(){
@@ -447,6 +436,7 @@ LinkcGroupSelect::~LinkcGroupSelect(){
         this->GroupMap->clear();
     }
     delete GroupMap;
+    this->currentSelectedSubscribedItem = nullptr;
 }
 
 void LinkcGroupSelect::onGroupClicked(LinkcGroupItem *item, bool){
@@ -471,6 +461,7 @@ void LinkcGroupSelect::onItemClicked(LinkcGroupItem *group, LinkcSubscribedItem 
             i++;
         }
     }
+    this->currentSelectedSubscribedItem = item;
     emit this->itemClicked(group,item);
 }
 
@@ -484,6 +475,7 @@ void LinkcGroupSelect::onItemDoubleClicked(LinkcGroupItem *group, LinkcSubscribe
             i++;
         }
     }
+    this->currentSelectedSubscribedItem = item;
     emit this->itemDoubleClicked(group,item);
 }
 
@@ -524,6 +516,8 @@ void LinkcGroupSelect::removeItemFromGroup(LinkcSubscribedItem *item, LinkcGroup
             i++;
         }
     }
+    if(item == this->currentSelectedSubscribedItem)
+        this->currentSelectedSubscribedItem = nullptr;
     QRect location;
     i++;
     while(i != this->GroupMap->end()){
@@ -559,6 +553,7 @@ void LinkcGroupSelect::clearSelect(){
         }
         this->GroupMap->clear();
     }
+    this->currentSelectedSubscribedItem = nullptr;
 }
 
 void LinkcGroupSelect::refreshSelect(){
@@ -580,6 +575,9 @@ LinkcSubscribedItem* LinkcGroupSelect::findItem(QString Id){
     return nullptr;
 }
 
+LinkcSubscribedItem* LinkcGroupSelect::getCurrentSelectedSubscribedItem(){
+    return this->currentSelectedSubscribedItem;
+}
 
 LinkcChatDialog::LinkcChatDialog(QWidget *parent, gurgle *_core,gurgle_presence_t* _presence){
     this->setParent(parent);

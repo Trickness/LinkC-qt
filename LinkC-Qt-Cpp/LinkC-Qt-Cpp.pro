@@ -10,15 +10,15 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = LinkC-Qt-Cpp
 TEMPLATE = app
-LIBS += -lwsock32
+#LIBS += -lwsock32
 QMAKE_CXXFLAGS += -std=c++11
 
 
 SOURCES += main.cpp \
     LoginWindow.cpp \
     gurgle.cpp \  
-    LinkcUi.cpp \
-    MainWindow.cpp
+    MainWindow.cpp \
+    LinkcUI.cpp
 
 HEADERS  += \
     LoginWindow.h \

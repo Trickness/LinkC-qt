@@ -38,6 +38,7 @@ public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
     void    resizeEvent(QResizeEvent *);
+    void    closeEvent(QCloseEvent *);
     bool    refreshSubscribedList(void);
     bool    refreshePresence(void);
 public slots:
@@ -47,6 +48,7 @@ public slots:
     void SLOT_PresenceMoodUpdated(QString);
     void SLOT_ItemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*);
     void SLOT_SubscribedButtonClicked(bool);
+    void SLOT_UnsubscribedButtonClicked(bool);
     void SLOT_RefreshSubscribeList(void);
     void SLOT_MessageReceived(QString, QString, int);
 private:
@@ -67,6 +69,7 @@ private:
     LinkcGroupSelect    *Ui_GroupSelect;
     QScrollArea         *Ui_GroupScrollArea;
     QPushButton         *Ui_SubscribedButton;
+    QPushButton         *Ui_UnsubscribedButton;
 };
 
 #endif // MAINWINDOW

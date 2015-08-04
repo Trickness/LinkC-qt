@@ -19,9 +19,9 @@ LoginWindow::LoginWindow(QWidget *parent)
     this->PasswordLabel = new QLabel(this);
 
     this->HostLabel->setGeometry(30,10,50,27);
-    this->HostInput->setGeometry(90,10,100,27);
-    this->PortLabel->setGeometry(200,10,25,27);
-    this->PortInput->setGeometry(230,10,40,27);
+    this->HostInput->setGeometry(90,10,95,27);
+    this->PortLabel->setGeometry(190,10,25,27);
+    this->PortInput->setGeometry(220,10,50,27);
     this->UsernameLabel->setGeometry(30,45,50,27);
     this->UsernameInput->setGeometry(90,45,180,27);
     this->PasswordLabel->setGeometry(30,80,50,27);

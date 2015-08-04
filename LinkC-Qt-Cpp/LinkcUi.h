@@ -138,6 +138,9 @@ public:
     void            removeItem(LinkcSubscribedItem*);
     void            hideItem(LinkcSubscribedItem*);
     void            showItem(LinkcSubscribedItem*);
+
+    void            setCore(gurgle *_core = nullptr);
+
     int             getSize(void);
     int             getHeight(void);
     int             getVisibleHeight(void);
@@ -163,8 +166,9 @@ private:
     QImage           image;
     QSize            pixSize;
     int             _height;
-    LinkcSubscribedItem  *prev;
-    LinkcSubscribedItem  *next;
+    LinkcSubscribedItem *prev;
+    LinkcSubscribedItem *next;
+    gurgle          *core;
 };
 typedef QMap<int,LinkcGroupItem*>        g_map_t;
 
@@ -177,6 +181,7 @@ public:
     void            removeItemFromGroup(LinkcSubscribedItem*,LinkcGroupItem*);
     void            refreshSize(void);
     LinkcSubscribedItem* findItem(QString Id);
+    LinkcSubscribedItem* getCurrentSelectedSubscribedItem(void);
 signals:
     void            groupClicked(LinkcGroupItem*);
     void            itemClicked(LinkcGroupItem*, LinkcSubscribedItem*);
@@ -189,6 +194,7 @@ public slots:
     void            clearSelect(void);
 private:
     g_map_t         *GroupMap;
+    LinkcSubscribedItem *currentSelectedSubscribedItem;
 };
 #endif // LINKC_UI
 

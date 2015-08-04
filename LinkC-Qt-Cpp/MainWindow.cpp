@@ -25,6 +25,7 @@ MainWindow::MainWindow(QWidget *parent):
     this->Ui_GroupScrollArea    = new QScrollArea(this);
     this->Ui_GroupSelect        = new LinkcGroupSelect(this->Ui_GroupScrollArea);
     this->Ui_SubscribedButton   = new QPushButton(this);
+    this->Ui_UnsubscribedButton = new QPushButton(this);
     this->Ui_SubscribedButton->setText(tr("Subscribe"));
     this->Ui_PresenceBase->setLayout(this->Ui_PresenceBaseLayout);
     this->Ui_PresenceWidget->setStyleSheet("background-color:white");
@@ -51,6 +52,7 @@ MainWindow::MainWindow(QWidget *parent):
     this->connect(this->Ui_Mood,SIGNAL(ContentUpdated(QString)),this,SLOT(SLOT_PresenceMoodUpdated(QString)));
     this->connect(this->Ui_GroupSelect,SIGNAL(itemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*)),this,SLOT(SLOT_ItemDoubleClicked(LinkcGroupItem*,LinkcSubscribedItem*)));
     this->connect(this->Ui_SubscribedButton,SIGNAL(clicked(bool)),this,SLOT(SLOT_SubscribedButtonClicked(bool)));
+    this->connect(this->Ui_UnsubscribedButton,SIGNAL(clicked(bool)),this,SLOT(SLOT_UnsubscribedButtonClicked(bool)));
     this->connect(this->SubscribeDialog,SIGNAL(subscribeDone()),this,SLOT(SLOT_RefreshSubscribeList()));
     this->connect(this->MsgReceiver,SIGNAL(messageReceived(QString,QString,int)),this,SLOT(SLOT_MessageReceived(QString,QString,int)));
 
@@ -69,13 +71,18 @@ MainWindow::~MainWindow(){
     delete this->Ui_PresenceBaseLayout;
     delete this->Ui_PresenceBase;
     delete this->Ui_SubscribedButton;
+    delete this->Ui_UnsubscribedButton;
 }
 void MainWindow::resizeEvent(QResizeEvent *){
     this->Ui_PresenceBase->setGeometry(0,0,this->width(),50);
     this->Ui_HeadWidget->setGeometry(this->width()-50,0,50,50);
     this->Ui_GroupScrollArea->setGeometry(0,50,this->width(),this->height()-100);
     this->Ui_GroupSelect->resize(this->width()-10,this->Ui_GroupSelect->height());
-    this->Ui_SubscribedButton->setGeometry(10,this->Ui_GroupScrollArea->y()+this->Ui_GroupScrollArea->height()+5,150,30);
+    this->Ui_SubscribedButton->setGeometry(10,this->Ui_GroupScrollArea->y()+this->Ui_GroupScrollArea->height()+5,140,30);
+    this->Ui_UnsubscribedButton->setGeometry(this->Ui_SubscribedButton->x()+145,this->Ui_GroupScrollArea->y()+this->Ui_GroupScrollArea->height()+5,140,30);
+}
+void MainWindow::closeEvent(QCloseEvent *){
+    this->Ui_GroupSelect->clearSelect();
 }
 
 void MainWindow::SLOT_LoginWinCancelButtonClicked(){
@@ -84,6 +91,19 @@ void MainWindow::SLOT_LoginWinCancelButtonClicked(){
 
 void MainWindow::SLOT_SubscribedButtonClicked(bool){
     this->SubscribeDialog->show();
+}
+
+void MainWindow::SLOT_UnsubscribedButtonClicked(bool){
+    LinkcSubscribedItem* tmpItem = this->Ui_GroupSelect->getCurrentSelectedSubscribedItem();
+    if(tmpItem == nullptr){
+        QMessageBox::warning(this,tr("Warning"),tr("You have not selected any item"));
+        return;
+    }
+    if(this->core->update_roster(tmpItem->getId(),nullptr,nullptr,UNSUBSCRIBE) == false){
+        QMessageBox::warning(this,tr("Warning"),tr("Failed to unsubscribe"));
+        return;
+    }
+    this->refreshSubscribedList();
 }
 
 void MainWindow::SLOT_LoginWinSignInButtonClicked(){
@@ -145,6 +165,7 @@ bool MainWindow::refreshSubscribedList(){
     if(list == nullptr)
         return false;
     LinkcGroupItem *item = new LinkcGroupItem();
+    item->setCore(this->core);
     item->setParent(this->Ui_GroupSelect);
     int i;
     for(i=0;i<count;i++){
