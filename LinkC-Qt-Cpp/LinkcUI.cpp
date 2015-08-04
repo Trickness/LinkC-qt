@@ -395,7 +395,9 @@ LinkcSubscribedItem* LinkcGroupItem::findItem(QString Id){
     int a,b;
     string strA;
     string strB;
-    char *idData = Id.toUtf8().data();
+    char *idData = new char[256];
+    memset(idData,0,256);
+    memcpy(idData,Id.toUtf8().data(),Id.toUtf8().length());
     char *nodeData = nullptr;
     strB = Id.toUtf8().data();
     if(this->ItemMap->isEmpty() == false){
@@ -408,17 +410,20 @@ LinkcSubscribedItem* LinkcGroupItem::findItem(QString Id){
             if(a>0 && b>0){
                 if(a == b){
                     if(strcmp(idData,nodeData) == 0){
+                        delete idData;
                         return i.value();
                     }
                 }
             }else{
                 if(strncmp(idData,nodeData,max(a,b)) == 0){
+                    delete idData;
                     return i.value();
                 }
             }
             i++;
         }
     }
+    delete idData;
     return nullptr;
 }
 

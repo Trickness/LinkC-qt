@@ -98,7 +98,7 @@ void MainWindow::SLOT_LoginWinSignInButtonClicked(){
     strncpy(username,this->LoginW->GetUsername().toUtf8().data(),this->LoginW->GetUsername().length());
     strncpy(password,this->LoginW->GetPassword().toUtf8().data(),this->LoginW->GetPassword().length());
     port = this->LoginW->GetPort();
-    if(!this->core->connect_to_server(host,port,nullptr)){
+    if(!this->core->connect_to_server(host,port,nullptr,2)){
         QMessageBox::warning(this,tr("Warning"),tr("Cannot connect to remote"),QMessageBox::Ok);
         return;
     }
@@ -122,8 +122,8 @@ void MainWindow::SLOT_LoginWinSignInButtonClicked(){
     while(1){
         memset(buf,0,512);
         memset(tmpBuf,0,512);
-        if(this->core->gurgle_recv(buf,512,0,"message",0)<=0)
-            break;
+        if(this->core->gurgle_recv(buf,512,0,"message",0,1)<=0)
+            return;
         d.Parse(buf);
         if(d.IsNull())
             break;
@@ -140,6 +140,7 @@ void MainWindow::SLOT_LoginWinSignInButtonClicked(){
 bool MainWindow::refreshSubscribedList(){
     int count = 0;
     gurgle_subscription_t   *list = nullptr;
+    this->Ui_GroupSelect->clearSelect();
     list = this->core->query_roster(count);
     if(list == nullptr)
         return false;
@@ -235,7 +236,17 @@ void MainWindow::SLOT_MessageReceived(QString User, QString Msg,int id){
             return;
         }
     }
-    this->MessageList->insert(Msg.toUtf8().data(),id,User.toUtf8().data());
+    int len = Msg.length();
+    int len2 = User.length();
+    char *buf = new char[len+1];
+    char *buf_usr = new char[len2+1];
+    memset(buf,0,len+1);
+    memset(buf_usr,0,len2+1);
+    memcpy(buf,Msg.toUtf8().data(),len);
+    memcpy(buf_usr,User.toUtf8().data(),User.length());
+    buf[len] = 0;
+    buf_usr[len2] = 0;
+    this->MessageList->insert(buf,id,buf_usr);
     this->MsgReceiver->messageSaveDone();
 }
 

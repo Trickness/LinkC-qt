@@ -155,8 +155,9 @@ public:
     bool remove(uint32_t packageID,const char *extData = nullptr){
         if (this->size == 0)
             return false;
+        packageNode *tempNode = nullptr;
         if (this->root->packageID == packageID){
-            packageNode *tempNode = this->root->nextNode;
+            tempNode = this->root->nextNode;
             delete this->root;
             this->size -= 1;
             this->root = tempNode;
@@ -164,7 +165,7 @@ public:
         }
         if (packageID == 0){
             if (extData == nullptr){
-                packageNode *tempNode = this->root->nextNode;
+                tempNode = this->root->nextNode;
                 delete this->root;
                 this->size -= 1;
                 this->root = tempNode;
@@ -184,7 +185,7 @@ public:
                             }
                         }else{
                             if(strncmp(this->root->extData,extData,max(a,b)) == 0){
-                                packageNode *tempNode = this->root->nextNode;
+                                tempNode = this->root->nextNode;
                                 delete this->root;
                                 this->size -= 1;
                                 this->root = tempNode;
@@ -199,7 +200,7 @@ public:
         while (curNode->nextNode != nullptr){
             if (curNode->nextNode->packageID == packageID){
                 if(packageID != 0){
-                    packageNode *tempNode = curNode->nextNode;
+                    tempNode = curNode->nextNode;
                     curNode->nextNode = curNode->nextNode->nextNode;
                     delete tempNode;
                     this->size -= 1;
@@ -215,25 +216,25 @@ public:
                             if(a>0 && b>0){
                                 if(a == b){
                                     if(strcmp(curNode->extData,extData) == 0){
-                                        packageNode *curNode = curNode->nextNode;
+                                        tempNode = curNode->nextNode;
                                         curNode->nextNode = curNode->nextNode->nextNode;
-                                        delete curNode;
+                                        delete tempNode;
                                         this->size -= 1;
                                         return true;
                                     }
                                 }
                             }else{
                                 if(strncmp(curNode->extData,extData,max(a,b)) == 0){
-                                    packageNode *curNode = curNode->nextNode;
+                                    tempNode = curNode->nextNode;
                                     curNode->nextNode = curNode->nextNode->nextNode;
-                                    delete curNode;
+                                    delete tempNode;
                                     this->size -= 1;
                                     return true;
                                 }
                             }
                         }
                     }else{
-                        packageNode *tempNode = curNode->nextNode;
+                        tempNode = curNode->nextNode;
                         curNode->nextNode = curNode->nextNode->nextNode;
                         delete tempNode;
                         this->size -= 1;
