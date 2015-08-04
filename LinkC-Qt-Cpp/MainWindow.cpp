@@ -122,8 +122,8 @@ void MainWindow::SLOT_LoginWinSignInButtonClicked(){
     while(1){
         memset(buf,0,512);
         memset(tmpBuf,0,512);
-        if(this->core->gurgle_recv(buf,512,0,"message",0,1)<=0)
-            return;
+        if(this->core->gurgle_recv(buf,512,0,"message",1,1)<=0)
+            break;
         d.Parse(buf);
         if(d.IsNull())
             break;

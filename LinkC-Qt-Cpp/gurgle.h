@@ -3,9 +3,11 @@
 
 #ifdef __WIN32__
 #include <winsock2.h>
-#elif _linux_
+#elif __linux__
 #include <sys/socket.h>
+#include <netdb.h>
 #include <arpa/inet.h>
+#define SOCKET_ERROR -1
 #endif
 
 #include <mutex>
@@ -30,6 +32,7 @@ using namespace std;
 #define GURGLE_LOG_MODE_ERROR   1
 #define GURGLE_LOG_MODE_COMMON  2
 #define GURGLE_LOG_MODE_DEBUG   3
+
 
 class packageNode{
 public:

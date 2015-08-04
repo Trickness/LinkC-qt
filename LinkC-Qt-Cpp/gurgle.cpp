@@ -227,13 +227,18 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const c
     }
     if(timeout != 0){
 #ifdef __WIN32__
-        int timeout_ms = timeout * 1000;
-        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
+        int _timeout = timeout * 1000;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&_timeout, sizeof(int))){
+#elif __linux__
+        struct timeval _timeout;
+        _timeout.tv_sec = timeout;
+        _timeout.tv_usec = 0;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&_timeout, sizeof(struct timeval))){
+#endif
             this->__recv_lock_release();
             this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
             return -1;
         }
-#endif
     }else{
         tempBuf = this->__package_list->get_data(message_id,message_type);
         if (tempBuf != nullptr){
@@ -244,8 +249,15 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const c
             this->__recv_lock_release();
             return maxlen;
         }
-        int timeout_ms = 500;
-        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
+#ifdef __WIN32__
+        int _timeout = 100;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&_timeout, sizeof(int))){
+#elif __linux__
+        struct timeval _timeout;
+        _timeout.tv_sec = 0;
+        _timeout.tv_usec = 100;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&_timeout, sizeof(struct timeval))){
+#endif
             this->__recv_lock_release();
             this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
             return -1;
@@ -528,17 +540,24 @@ bool gurgle::connect_to_server(const char *strDomain, uint16_t nPort, const char
             delete ip;
             return false;
         }
+#ifdef __WIN32__
         delete ip;
+#endif
         serverAddr.sin_addr.s_addr = ip_32bit;
     }
+    if(timeout != 0){
 #ifdef __WIN32__
-    int timeout_ms = timeout * 1000;
-    if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout_ms, sizeof(int))){
-        this->__recv_lock_release();
-        this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
-        return false;
-    }
+        int _timeout = timeout * 1000;
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&_timeout, sizeof(int))){
+#elif __linux__
+        struct timeval _timeout = {timeout,0};
+        if (SOCKET_ERROR ==  setsockopt(this->__socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&_timeout, sizeof(struct timeval))){
 #endif
+            this->__recv_lock_release();
+            this->write_log("Set Ser_RecTIMEO error ",GURGLE_LOG_MODE_ERROR);
+            return -1;
+        }
+    }
     if(connect(this->__socket,(struct sockaddr*)&serverAddr,sizeof(serverAddr)) == -1){
         this->write_log("Cannot connect to remote",GURGLE_LOG_MODE_ERROR);
         return false;
@@ -826,7 +845,7 @@ bool gurgle::plain_password_auth(gurgle_id_t id, const char *password){
             }else if(d["reply"]["error"].IsNull()){
                 if(d.HasMember("to")){
                     if(d["to"].IsString()){
-                        memset(this->__gurgle_id,64,0);
+                        memset(this->__gurgle_id,0,64);
                         strncpy(this->__gurgle_id,d["to"].GetString(),d["to"].GetStringLength());
                         this->set_authenticated(true);
                     }else{
