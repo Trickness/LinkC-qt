@@ -207,6 +207,7 @@ void MainWindow::SLOT_PresenceNameUpdated(QString Name){
         QMessageBox::warning(this,tr("Warning"),tr("Too long for name"));
     }
     gurgle_presence_t *t = new gurgle_presence_t;
+    memset(t,0,sizeof(gurgle_presence_t));
     strncpy(t->last_name,Name.toUtf8().data(),Name.length());
     if(this->core->publish_self_presence_update(t) == false){
         this->core->write_log("Failed to publish presence");
@@ -220,6 +221,7 @@ void MainWindow::SLOT_PresenceMoodUpdated(QString Mood){
         QMessageBox::warning(this,tr("Warning"),tr("Too long for Mood"));
     }
     gurgle_presence_t *t = new gurgle_presence_t;
+    memset(t,0,sizeof(gurgle_presence_t));
     strncpy(t->mood,Mood.toUtf8().data(),Mood.length());
     if(this->core->publish_self_presence_update(t) == false){
         this->core->write_log("Failed to publish presence");
