@@ -27,6 +27,7 @@ MainWindow::MainWindow(QWidget *parent):
     this->Ui_SubscribedButton   = new QPushButton(this);
     this->Ui_UnsubscribedButton = new QPushButton(this);
     this->Ui_SubscribedButton->setText(tr("Subscribe"));
+    this->Ui_UnsubscribedButton->setText(tr("Unsubscribe"));
     this->Ui_PresenceBase->setLayout(this->Ui_PresenceBaseLayout);
     this->Ui_PresenceWidget->setStyleSheet("background-color:white");
     this->Ui_HeadWidget->setStyleSheet("background-color:yellow");
@@ -169,6 +170,9 @@ bool MainWindow::refreshSubscribedList(){
     item->setParent(this->Ui_GroupSelect);
     int i;
     for(i=0;i<count;i++){
+        if(strcmp(list[i].presence.id,"") == 0){
+            continue;
+        }
         item->InsertSubscribedItem(new LinkcSubscribedItem(item,&list[i]));
     }
     this->Ui_GroupSelect->insertGroup(item);

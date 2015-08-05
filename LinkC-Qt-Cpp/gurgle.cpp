@@ -971,7 +971,7 @@ gurgle_subscription_t* gurgle::query_roster(int &size){
     if(d.HasMember("reply")){
         if(d["reply"].HasMember("error")){
             if(d["reply"]["error"].IsNull() == false){
-                sprintf(log,"Error : %s",d["reply"]["error"].GetString());
+                sprintf(log,"Error : %s\tReason : %s",d["reply"]["error"].GetString(),d["reply"]["reason"].GetString());
                 this->write_log(log);
                 delete log;
                 delete recv_buf;
@@ -992,6 +992,9 @@ gurgle_subscription_t* gurgle::query_roster(int &size){
         memset(p,0,size*sizeof(gurgle_subscription_t));
         int i;
         for(i=0;i<size;i++){
+            if(d["reply"]["value"][i].Size() == 2){  // cannot fetch such user's presence
+                continue;
+            }
             if(d["reply"]["value"][i][0].IsString())
                 memcpy(p[i].presence.id,        d["reply"]["value"][i][0].GetString(),d["reply"]["value"][i][0].GetStringLength());
             if(d["reply"]["value"][i][1].IsString())
