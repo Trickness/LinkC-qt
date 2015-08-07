@@ -43,6 +43,7 @@ gurgle::gurgle(int mode){
     this->__socket              = 0;
     this->__recv_roster         = 0;
     this->__log_level           = 3;
+    this->__recv_tag            = 1;
     this->__package_list        = new packageList();
     this->__recv_door_1         = new door_lock();
     this->__recv_door_2         = new door_lock();
@@ -140,8 +141,12 @@ int gurgle::disconnect_from_remote(const char *reason, uint32_t message_id){
     this->gurgle_send(sb.GetString(),sb.GetSize());
     char *recv_buf = new char[512];
     memset(recv_buf,0,512);
-    if(this->gurgle_recv(recv_buf,512,0)){
+    if(this->gurgle_recv(recv_buf,512,0,nullptr,5)){
         d.Parse(recv_buf);
+        if(d.IsObject() == false){
+            this->write_log("Something bad happend");
+            return 0;
+        }
         if(d.HasMember("reply")){
             char *log = new char[512];
             memset(log,0,512);
@@ -191,25 +196,51 @@ void gurgle::__recv_lock_release(){
         this->__recv_door_2->door_step_into();
     this->__recv_door_2->door_close();
     this->__recv_door_1->door_open();
+}
 
+void gurgle::allow_reading(){
+    this->__recv_door_1->door_close();
+    this->__recv_door_2->door_open();
+    while (this->__recv_roster)
+        this->__recv_door_2->door_rush_into();
+    if(this->__recv_door_2->lock.try_lock()){
+        this->__recv_door_1->door_open();
+        return;
+    }
+    this->__recv_door_1->door_open();
 }
 
 int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const char *message_type, int timeout, int max_try){
     if (buf == nullptr)
         return -1;
-    if (this->is_connected() == false)
-        return -1;
     memset(buf,0,buf_size);
     int maxlen = 0;
     char *tempBuf = nullptr;
+    uint64_t t_tag = this->__recv_tag - 1;
     while(1){
         this->__recv_door_1->door_rush_into();
         if (this->__recv_mutex.try_lock())
             break;
         this->__recv_roster += 1;
+        while(t_tag < this->__recv_tag){
+            this->__recv_door_1->door_close();
+            tempBuf = this->__package_list->get_data(message_id,message_type);
+            if (tempBuf != nullptr){
+                maxlen = max(buf_size,strlen(tempBuf));
+                memcpy(buf,tempBuf,max(buf_size,strlen(tempBuf)));
+                this->__package_list->remove(message_id,message_type);
+                tempBuf = nullptr;
+                this->__recv_door_1->door_open();
+                this->__recv_roster -= 1;
+                return maxlen;
+            }
+            t_tag = this->__recv_tag;
+            this->__recv_door_1->door_open();
+        }
         this->__recv_door_2->door_step_into();
         tempBuf = this->__package_list->get_data(message_id,message_type);
         this->__recv_roster -= 1;
+        t_tag = this->__recv_tag;
         this->__recv_door_2->door_step_out();
         if (tempBuf != nullptr){
             maxlen = max(buf_size,strlen(tempBuf));
@@ -221,7 +252,6 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const c
         if(timeout == 0)
             return 0;
     }
-    this->__recv_door_2->door_open();
     if (this->is_connected() == false){
         this->__recv_lock_release();
         this->write_log("Connection has not been established!",GURGLE_LOG_MODE_ERROR);
@@ -409,6 +439,7 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const c
                     this->__package_list->insert(tempBuf,id,json_obj);
             }
         }
+        this->__recv_tag += 1;
         if(return_buf != nullptr){
             int len = strlen(return_buf);
             if (len > (int)buf_size){
@@ -425,6 +456,7 @@ int gurgle::gurgle_recv(char *buf, size_t buf_size, uint32_t message_id, const c
             delete json_obj;
             return len;
         }
+        this->allow_reading();
     }
     this->__recv_lock_release();
     delete json_obj;
@@ -597,7 +629,7 @@ bool gurgle::connect_to_server(const char *strDomain, uint16_t nPort, const char
     d.Parse(tempBuf);
     if(d.HasMember("reply")){
         if(d["reply"].HasMember("status")){
-            if(strcmp(d["reply"]["status"].GetString(),"connection established"))
+            if(strcmp(d["reply"]["status"].GetString(),"connection established") == 0)
                     this->__is_connected = true;
             else
                     this->disconnect_from_remote();

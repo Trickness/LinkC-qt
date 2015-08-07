@@ -58,8 +58,10 @@ public:
     packageList(){
         this->size = 0;
         this->root = nullptr;
+        this->l_lock.unlock();
     }
     ~packageList(){
+        this->l_lock.lock();
         if (this->root == nullptr)
             return;
         packageNode *curNode = this->root;
@@ -73,6 +75,7 @@ public:
         return;
     }
     void insert(char* newData,uint32_t packageID,const char* extData = nullptr){
+        this->l_lock.lock();
         packageNode *newNode = new packageNode(newData);
         newNode->packageID = packageID;
         if(extData != nullptr){
@@ -85,6 +88,7 @@ public:
         if (this->root == nullptr){
             this->root = newNode;
             this->size += 1;
+            this->l_lock.unlock();
             return;
         }
         packageNode *tempNode = this->root;
@@ -92,6 +96,7 @@ public:
             tempNode = tempNode->nextNode;
         tempNode->nextNode = newNode;
         this->size += 1;
+        this->l_lock.unlock();
         return;
     }
     void clear(void){
@@ -100,7 +105,9 @@ public:
     }
 
     char* get_data(uint32_t packageID,const char* extData = nullptr){
+        this->l_lock.lock();
         if (this->size == 0){
+            this->l_lock.unlock();
             return nullptr;
         }else{
             string strA;
@@ -110,9 +117,11 @@ public:
             int i;
             for(i=0;i<this->size;i++){
                 if (tempNode->packageID == packageID || packageID == 0){
-                    if(extData == nullptr)
+                    if(extData == nullptr){
+                        this->l_lock.unlock();
                         return tempNode->data;
-                    else if(packageID != 0){
+                    }else if(packageID != 0){
+                        this->l_lock.unlock();
                         return tempNode->data;
                     }else{
                         if(tempNode->extData != nullptr){
@@ -125,23 +134,31 @@ public:
                                     tempNode = tempNode->nextNode;
                                     continue;
                                 }else{
-                                    if(strcmp(tempNode->extData,extData) == 0)
+                                    if(strcmp(tempNode->extData,extData) == 0){
+                                        this->l_lock.unlock();
                                         return tempNode->data;
+                                    }
                                 }
                             }
-                            if(strncmp(tempNode->extData,extData,max(a,b)) == 0)
+                            if(strncmp(tempNode->extData,extData,max(a,b)) == 0){
+                                this->l_lock.unlock();
                                 return tempNode->data;
+                            }
                         }
                     }
                 }
                 tempNode = tempNode->nextNode;
             }
         }
+        this->l_lock.unlock();
         return nullptr;
     }
     char* get_one(void){
-        if (this->size == 0)
+        this->l_lock.lock();
+        if (this->size == 0){
+            this->l_lock.unlock();
             return nullptr;
+        }
         packageNode *tempNode = this->root;
         this->root = this->root->nextNode;
         char *returnValue = new char[512];
@@ -152,18 +169,23 @@ public:
         delete tempNode->data;
         delete tempNode;
         this->size -= 1;
+        this->l_lock.unlock();
         return returnValue;
     }
 
     bool remove(uint32_t packageID,const char *extData = nullptr){
-        if (this->size == 0)
+        this->l_lock.lock();
+        if (this->size == 0){
+            this->l_lock.unlock();
             return false;
+        }
         packageNode *tempNode = nullptr;
         if (this->root->packageID == packageID){
             tempNode = this->root->nextNode;
             delete this->root;
             this->size -= 1;
             this->root = tempNode;
+            this->l_lock.unlock();
             return true;
         }
         if (packageID == 0){
@@ -172,6 +194,7 @@ public:
                 delete this->root;
                 this->size -= 1;
                 this->root = tempNode;
+                this->l_lock.unlock();
                 return true;
             }else{
                 if(this->root->extData != nullptr){
@@ -184,6 +207,7 @@ public:
                         if(a>0 && b>0){
                             if(a == b){
                                 if(strcmp(this->root->extData,extData) == 0)
+                                    this->l_lock.unlock();
                                     return this->root->data;
                             }
                         }else{
@@ -192,6 +216,7 @@ public:
                                 delete this->root;
                                 this->size -= 1;
                                 this->root = tempNode;
+                                this->l_lock.unlock();
                                 return true;
                             }
                         }
@@ -207,6 +232,7 @@ public:
                     curNode->nextNode = curNode->nextNode->nextNode;
                     delete tempNode;
                     this->size -= 1;
+                    this->l_lock.unlock();
                     return true;
                 }else{
                     if(extData != nullptr){
@@ -223,6 +249,7 @@ public:
                                         curNode->nextNode = curNode->nextNode->nextNode;
                                         delete tempNode;
                                         this->size -= 1;
+                                        this->l_lock.unlock();
                                         return true;
                                     }
                                 }
@@ -232,6 +259,7 @@ public:
                                     curNode->nextNode = curNode->nextNode->nextNode;
                                     delete tempNode;
                                     this->size -= 1;
+                                    this->l_lock.unlock();
                                     return true;
                                 }
                             }
@@ -241,12 +269,14 @@ public:
                         curNode->nextNode = curNode->nextNode->nextNode;
                         delete tempNode;
                         this->size -= 1;
+                        this->l_lock.unlock();
                         return true;
                     }
                 }
             }
             curNode = curNode->nextNode;
         }
+        this->l_lock.unlock();
         return false;
     }
     packageNode *get_root(void){
@@ -256,15 +286,18 @@ public:
         return this->size;
     }
     void print_list(void){
+        this->l_lock.lock();
         packageNode *tempNode = this->root;
         while(tempNode != nullptr){
             printf ("%s",tempNode->data);
             tempNode = tempNode->nextNode;
         }
+        this->l_lock.unlock();
     }
 protected:
     int         size;
     packageNode *root;
+    mutex       l_lock;
 };
 
 class door_lock{
@@ -294,7 +327,6 @@ public:
     void door_step_out(void){
         this->lock.unlock();
     }
-private:
     std::mutex lock;
 };
 
@@ -382,6 +414,7 @@ public:
     int         subscribe();
     int         unsubscribe();
     int         disconnect_from_remote(const char *reason=nullptr,uint32_t message_id=0);
+    void        allow_reading();
 
     // C++ client Only methods
 
@@ -409,6 +442,7 @@ private:
     char        __session[32];
     char**      __alias;
     int         __alias_size;
+    uint64_t    __recv_tag;
 
     //C++ client Only vars
     rapidjson::Document global_document;

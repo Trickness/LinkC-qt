@@ -302,7 +302,7 @@ void MessageReceiver::run(){
     while(1){
         while(!this->flag); // wait MainThread to save message
         recved = this->core->gurgle_recv(recvBuf,1024,0,"message",5,10);
-        if(!(recved>0)){
+        if(!(recved>=0)){
             if(this->core->is_connected() == false)
                 break;
             continue;
